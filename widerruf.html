@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vertrag widerrufen – Trading Journal</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.65; max-width: 720px; margin: 0 auto;
+    padding: 24px 18px 80px; color: #1a1c1e; background: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e3e5e8; background: #101418; }
+    input, textarea { background: #1a1f26; color: #e3e5e8; border-color: #39424b !important; }
+    .box { background: #1a1f26 !important; }
+  }
+  h1 { font-size: 1.6rem; margin-bottom: .2em; }
+  .updated { color: #666; font-size: .9rem; margin-top: 0; }
+  a { color: #00796b; }
+  .btn {
+    display: inline-block; background: #00796b; color: #fff; border: 0;
+    padding: 13px 24px; border-radius: 8px; font-size: 1rem; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .5; cursor: default; }
+  label { display: block; font-weight: 600; margin-top: 14px; }
+  .hint { font-weight: 400; color: #666; font-size: .9rem; }
+  input, textarea {
+    width: 100%; box-sizing: border-box; padding: 10px 12px; margin-top: 4px;
+    border: 1px solid #bbb; border-radius: 6px; font: inherit;
+  }
+  .box { background: #f4f6f8; border-radius: 8px; padding: 14px 16px; margin: 1.2em 0; }
+  .error { color: #c62828; font-weight: 600; }
+  .trap { position: absolute; left: -9999px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<h1>Vertrag widerrufen</h1>
+<p class="updated">Trading Journal · Kauf der Vollversion</p>
+
+<p>Hier kannst du deinen Vertrag über den Kauf der Vollversion widerrufen.
+In der App findest du dieselbe Funktion unter <strong>Mehr → Vertrag
+widerrufen</strong>. Informationen zu deinem Widerrufsrecht stehen in der
+<a href="widerrufsbelehrung.html">Widerrufsbelehrung</a>.</p>
+
+<!-- Schritt 1 -->
+<div id="step1">
+  <button class="btn" type="button" id="start">Vertrag widerrufen</button>
+</div>
+
+<!-- Schritt 2 -->
+<form id="step2" hidden>
+  <label for="name">Name</label>
+  <input id="name" name="name" autocomplete="name" required maxlength="120">
+
+  <label for="contract">Bestellnummer
+    <span class="hint">– steht in der Kaufbestätigung von Google Play, beginnt mit GPA.</span></label>
+  <input id="contract" name="contract" required maxlength="120">
+
+  <label for="email">E-Mail-Adresse für die Eingangsbestätigung</label>
+  <input id="email" name="email" type="email" autocomplete="email" required maxlength="200">
+
+  <label for="reason">Grund <span class="hint">(freiwillig)</span></label>
+  <textarea id="reason" name="reason" rows="3" maxlength="1000"></textarea>
+
+  <!-- Falle für Spam-Programme, für Menschen unsichtbar -->
+  <input class="trap" id="website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+  <p id="error" class="error" hidden></p>
+  <p><button class="btn" type="submit" id="submit">Widerruf bestätigen</button></p>
+</form>
+
+<!-- Ergebnis -->
+<div id="done" class="box" hidden>
+  <p style="margin-top:0"><strong>Deine Widerrufserklärung ist eingegangen.</strong></p>
+  <p>Eingang: <span id="receivedAt"></span></p>
+  <p id="mailInfo" style="margin-bottom:0"></p>
+</div>
+
+<p style="margin-top:2em">Alternativ kannst du auch formlos per E-Mail an
+<a href="mailto:joel-bonk@gmx.de">joel-bonk@gmx.de</a> widerrufen.</p>
+
+<p><a href="index.html">Startseite</a> · <a href="impressum.html">Impressum</a></p>
+
+<script>
+  // Adresse der Edge Function. <PROJECT_REF> durch die Kennung deines
+  // Supabase-Projekts ersetzen (steht in der Projekt-URL).
+  const FUNCTION_URL = "https://alybobqqqbpsbntebonj.supabase.co/functions/v1/submit-withdrawal";
+
+  const $ = (id) => document.getElementById(id);
+
+  $("start").addEventListener("click", () => {
+    $("step1").hidden = true;
+    $("step2").hidden = false;
+    $("name").focus();
+  });
+
+  $("step2").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("error").hidden = true;
+    $("submit").disabled = true;
+    try {
+      const res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: $("name").value,
+          contract_ref: $("contract").value,
+          email: $("email").value,
+          reason: $("reason").value,
+          website: $("website").value,
+          source: "web"
+        })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Senden fehlgeschlagen");
+      $("step2").hidden = true;
+      $("done").hidden = false;
+      $("receivedAt").textContent = data.received_text || "soeben";
+      $("mailInfo").textContent = data.confirmation_sent
+        ? "Die Eingangsbestätigung wurde an " + $("email").value + " geschickt."
+        : "Die Bestätigungs-E-Mail konnte gerade nicht verschickt werden – wir senden sie von Hand nach.";
+    } catch (err) {
+      $("error").textContent = err.message +
+        " – Du kannst auch per E-Mail an joel-bonk@gmx.de widerrufen.";
+      $("error").hidden = false;
+    } finally {
+      $("submit").disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>
